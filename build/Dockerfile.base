@@ -1,0 +1,62 @@
+# [Choice] Debian version: bullseye, bookworm, jammy, noble
+ARG VARIANT="debian:bookworm-slim"
+FROM ${VARIANT}
+
+# [Options]
+ARG INSTALL_ZSH="true"
+ARG UPGRADE_PACKAGES="true"
+ARG USERNAME=latex
+ARG USER_UID=1001
+ARG USER_GID=$USER_UID
+ARG PANDOC_VERSION=3.6
+
+COPY scripts/*.sh /tmp/library-scripts/
+RUN bash /tmp/library-scripts/install-goodies.sh "${INSTALL_ZSH}" "${USERNAME}" "${USER_UID}" "${USER_GID}" "${UPGRADE_PACKAGES}" "true" "true" \
+    && apt-get clean -y && rm -rf /var/lib/apt/lists/* /tmp/library-scripts
+
+# Install tools
+RUN apt-get update && export DEBIAN_FRONTEND=noninteractive && \
+    apt-get upgrade -y && apt-get install --no-install-recommends --yes \
+    zsh ssh-client zip git bash-completion neovim nano less wget curl && \
+    apt-get clean -y && rm -rf /var/lib/apt/lists/* /tmp/library-scripts
+
+# Install LaTeX
+RUN apt-get update && export DEBIAN_FRONTEND=noninteractive && \
+    apt-get upgrade -y && apt-get install -y texlive \
+    texlive-latex-extra texlive-fonts-recommended texlive-plain-generic \
+    texlive-lang-english texlive-luatex texlive-xetex lmodern \
+    texlive-pstricks ps2eps texlive-extra-utils ghostscript ruby \
+    libyaml-tiny-perl texlive-science latexmk cm-super chktex && \
+    apt-get clean -y && apt autoremove && sudo apt autoclean && \
+    rm -rf /var/lib/apt/lists/* /tmp/library-scripts
+
+# Install Pandoc
+RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
+    && apt-get install -y --no-install-recommends librsvg2-bin libjs-mathjax wkhtmltopdf \
+    && if [ "$(uname -m)" = "aarch64" ]; then wget --quiet https://github.com/jgm/pandoc/releases/download/$PANDOC_VERSION/pandoc-$PANDOC_VERSION-1-arm64.deb -O pandoc.deb; fi \
+    && if [ "$(uname -m)" = "x86_64" ]; then wget --quiet https://github.com/jgm/pandoc/releases/download/$PANDOC_VERSION/pandoc-$PANDOC_VERSION-1-amd64.deb -O pandoc.deb; fi \
+    && if [ -f pandoc.deb ]; then apt-get install -y ./pandoc.deb && rm pandoc.deb; fi \
+    && apt-get autoclean
+
+ARG USERNAME="latex"
+ARG USER_UID=1001
+ARG USER_GID=1000
+
+RUN if [ ${USERNAME} != "latex" ] && [ ${USERNAME} != "root" ]; \
+    then useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
+    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL >> /etc/sudoers.d/$USERNAME \
+    else echo "No new user created"; fi
+
+RUN mkdir -p /home/${USERNAME}/.vscode-server/extensions \
+    && mkdir -p /root/.vscode-server/extensions \
+    && chown -R ${USERNAME} /home/${USERNAME}/.vscode-server
+
+RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
+    && mkdir /commandhistory \
+    && touch /commandhistory/.bash_history \
+    && chown -R $USERNAME /commandhistory \
+    && echo $SNIPPET >> "/home/${USERNAME}/.bashrc" \
+    && echo $SNIPPET >> "/root/.bashrc"
+
+RUN chsh --shell /bin/zsh ${USERNAME}
+

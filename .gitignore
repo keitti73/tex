@@ -1,0 +1,21 @@
+# VsCode
+
+.vs
+
+# LaTeX compile stuff
+*.fdb_latexmk
+*.blg
+*.log
+*.out
+*.aux
+*.toc
+*.lof
+*.fls
+*.gz
+*.bst
+*.bbl
+*.suo
+*.lot
+
+# Out
+main.pdf
